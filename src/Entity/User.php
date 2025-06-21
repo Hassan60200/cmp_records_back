@@ -36,6 +36,9 @@ class User implements \Symfony\Component\Security\Core\User\PasswordAuthenticate
     #[ORM\OneToMany(targetEntity: Booking::class, mappedBy: 'user')]
     private Collection $bookings;
 
+    #[ORM\Column(length: 255)]
+    private ?string $roles = null;
+
     public function __construct()
     {
         $this->bookings = new ArrayCollection();
@@ -132,6 +135,18 @@ class User implements \Symfony\Component\Security\Core\User\PasswordAuthenticate
                 $booking->setUser(null);
             }
         }
+
+        return $this;
+    }
+
+    public function getRoles(): ?string
+    {
+        return $this->roles;
+    }
+
+    public function setRoles(string $roles): static
+    {
+        $this->roles = $roles;
 
         return $this;
     }

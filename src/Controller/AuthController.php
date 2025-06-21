@@ -2,17 +2,22 @@
 
 namespace App\Controller;
 
-use App\Entity\User;
+use Exception;
 use App\Repository\UserRepository;
-use Doctrine\ORM\EntityManagerInterface;
+use App\Service\AuthManager;
+use Symfony\Component\HttpFoundation\Response;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
 use Symfony\Component\HttpFoundation\JsonResponse;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\PasswordHasher\Hasher\UserPasswordHasherInterface;
 use Symfony\Component\Routing\Annotation\Route;
+use Symfony\Component\Security\Core\Exception\AuthenticationException;
 
 class AuthController extends AbstractController
 {
+    public function __construct(private readonly AuthManager $authManager)
+    {
+    }
     #[Route('/api/login', name: 'api_login', methods: ['POST'])]
     public function login(
         Request                     $request,
@@ -21,37 +26,23 @@ class AuthController extends AbstractController
     ): JsonResponse
     {
         $data = json_decode($request->getContent(), true);
-        $user = $userRepository->findOneBy(['email' => $data['email']]);
-        dd($user);
-        if (!$user || !$passwordHasher->isPasswordValid($user, $data['password'] ?? '')) {
-            return new JsonResponse(['error' => 'Invalid credentials'], 401);
+        try {
+            $token = $this->authManager->login($data['email'], $data['password']);
+            return new JsonResponse(['token' => $token]);
+        } catch (AuthenticationException $e) {
+            return new JsonResponse(['message' => $e->getMessage()], Response::HTTP_UNAUTHORIZED);
         }
-
-        return new JsonResponse(['message' => 'Login successful'], 200);
     }
 
-    #[Route('/api/register', name: 'api_register', methods: ['POST'])]
-    public function register(
-        Request                     $request,
-        EntityManagerInterface      $em,
-        UserPasswordHasherInterface $passwordHasher
-    ): JsonResponse
+    #[Route('/api/registration', name: 'api_registration', methods: ['POST', 'GET'])]
+    public function registration(Request $request): JsonResponse
     {
         $data = json_decode($request->getContent(), true);
-        $email = $data['email'] ?? null;
-        $plainPassword = $data['password'] ?? null;
-
-        if (!$email || !$plainPassword) {
-            return new JsonResponse(['error' => 'Missing email or password'], 400);
+        try {
+            $user = $this->authManager->registration($data);
+            return new JsonResponse(['message' => 'User registered successfully'], Response::HTTP_OK);
+        } catch (Exception $e) {
+            return new JsonResponse(['message' => $e->getMessage()], Response::HTTP_BAD_REQUEST);
         }
-
-        $user = new User();
-        $user->setEmail($email);
-        $user->setPassword($passwordHasher->hashPassword($user, $plainPassword));
-
-        $em->persist($user);
-        $em->flush();
-
-        return new JsonResponse(['message' => 'User registered'], 201);
     }
 }

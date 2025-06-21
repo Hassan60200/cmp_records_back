@@ -1,0 +1,56 @@
+name: Cmp_Records_Backend CI
+
+on:
+    push:
+        branches: [main]
+    pull_request:
+        branches: [main]
+
+jobs:
+    build:
+        runs-on: ubuntu-latest
+
+        services:
+            mysql:
+                image: mysql:8.0
+                env:
+                    MYSQL_ROOT_PASSWORD: root
+                    MYSQL_DATABASE: symfony_test
+                ports: [3306:3306]
+                options: >-
+                    --health-cmd="mysqladmin ping --silent"
+                    --health-interval=10s
+                    --health-timeout=5s
+                    --health-retries=3
+
+        steps:
+            - name: Checkout code
+              uses: actions/checkout@v3
+
+            - name: Set up PHP
+              uses: shivammathur/setup-php@v2
+              with:
+                  php-version: '8.2'
+                  extensions: mbstring, pdo, pdo_mysql, intl
+                  coverage: none
+
+            - name: Install Composer dependencies
+              run: composer install --no-interaction --prefer-dist
+
+            - name: Create .env.test
+              run: cp .env .env.test
+
+            - name: Wait for MySQL
+              run: |
+                  sudo apt-get install -y mysql-client
+                  until mysqladmin ping -h127.0.0.1 -uroot -proot; do
+                    sleep 1
+                  done
+
+            - name: Set up database
+              run: |
+                  php bin/console doctrine:database:create --env=test
+                  php bin/console doctrine:migrations:migrate --no-interaction --env=test
+
+            - name: Run tests
+              run: php bin/phpunit
